@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#b8283c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>Pokédex</title>
+<style>
+:root{--rojo:#b8283c;--pantalla:#e4efe6;--tinta:#18222c;--suave:#5b6b78;--tarjeta:#f7fbf8;--borde:#b9cbbf}
+@media (prefers-color-scheme:dark){:root{--pantalla:#12201a;--tinta:#e3f1e8;--suave:#8fa89b;--tarjeta:#1a2c24;--borde:#2f4a3e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--pantalla);color:var(--tinta);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{background:var(--rojo);color:#fff;padding:calc(env(safe-area-inset-top) + 12px) 14px 12px;position:sticky;top:0;z-index:5;box-shadow:0 3px 0 #7d1a28}
+h1{margin:0 0 10px;font-size:1.35rem;letter-spacing:.02em}
+.filtros{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.filtros input{grid-column:1/-1}
+input,select{font:inherit;padding:9px 10px;border-radius:8px;border:2px solid #7d1a28;background:#fff;color:#18222c;width:100%}
+#cuenta{font-size:.85rem;margin:8px 0 0;opacity:.9}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;padding:12px;max-width:900px;margin:auto}
+.card{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:8px 6px;text-align:center;cursor:pointer;font:inherit;color:inherit}
+.card:focus-visible,button:focus-visible{outline:3px solid #f2b705;outline-offset:2px}
+.card img{width:80px;height:80px;image-rendering:pixelated}
+.num{display:block;font-size:.75rem;color:var(--suave)}
+.nom{display:block;font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
+dialog{border:0;border-radius:14px;padding:0;width:min(440px,94vw);max-height:90vh;background:var(--tarjeta);color:var(--tinta)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.ficha{padding:16px}
+.arriba{display:flex;justify-content:space-between;align-items:center}
+.cerrar{border:0;background:none;font-size:1.6rem;color:var(--tinta);padding:4px 10px}
+.sprite{display:block;margin:6px auto;width:192px;height:192px;image-rendering:pixelated;background:var(--pantalla);border-radius:12px}
+.btnshiny{display:block;margin:0 auto 12px;padding:9px 16px;border-radius:20px;border:2px solid var(--rojo);background:none;color:var(--tinta);font:inherit;font-weight:600}
+.btnshiny[aria-pressed=true]{background:var(--rojo);color:#fff}
+.tipos span{display:inline-block;padding:2px 10px;border-radius:12px;background:var(--tinta);color:var(--tarjeta);font-size:.8rem;margin-right:6px}
+.dato{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--borde);font-size:.92rem}
+.stat{display:grid;grid-template-columns:78px 34px 1fr;align-items:center;gap:6px;font-size:.85rem;margin:4px 0}
+.barra{height:8px;background:var(--borde);border-radius:4px;overflow:hidden}
+.barra i{display:block;height:100%;background:var(--rojo)}
+.desc{line-height:1.45;margin:10px 0}
+#vacio{text-align:center;padding:30px;color:var(--suave)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Pokédex</h1>
+  <div class="filtros">
+    <input id="q" type="search" placeholder="Search by name or number" aria-label="Search">
+    <select id="reg" aria-label="Region"><option value="">All regions</option></select>
+    <select id="tipo" aria-label="Type"><option value="">All types</option></select>
+  </div>
+  <p id="cuenta"></p>
+</header>
+<main><div id="grid"></div><p id="vacio" hidden>No Pokémon match. Try another name or remove a filter.</p></main>
+<dialog id="dlg"></dialog>
+<script>
+let D = [];
+const $ = s => document.querySelector(s);
+const sp = (id, sh) => `sprites/${id}${sh ? "_shiny" : ""}.png`;
+
+fetch("data.json").then(r => r.json()).then(d => {
+  D = d;
+  const regs = [...new Set(D.map(p => p.generacion + "|" + p.region))].sort();
+  regs.forEach(r => { const [g, n] = r.split("|"); $("#reg").add(new Option(`${n} (Gen ${g})`, g)); });
+  [...new Set(D.flatMap(p => p.tipos))].sort().forEach(t => $("#tipo").add(new Option(t, t)));
+  pintar();
+}).catch(() => { $("#cuenta").textContent = "data.json not found. Run descargar_pokedex.py first."; });
+
+function pintar() {
+  const q = $("#q").value.trim().toLowerCase(), g = $("#reg").value, t = $("#tipo").value;
+  const lista = D.filter(p =>
+    (!q || p.nombre.toLowerCase().includes(q) || String(p.id) === q) &&
+    (!g || String(p.generacion) === g) && (!t || p.tipos.includes(t)));
+  $("#cuenta").textContent = `${lista.length} of ${D.length} Pokémon`;
+  $("#vacio").hidden = lista.length > 0;
+  $("#grid").innerHTML = lista.map(p => `<button class="card" data-id="${p.id}">
+    <img loading="lazy" src="${sp(p.id)}" alt=""><span class="num">No. ${String(p.id).padStart(4, "0")}</span>
+    <span class="nom">${p.nombre}</span></button>`).join("");
+}
+["#q", "#reg", "#tipo"].forEach(s => $(s).addEventListener("input", pintar));
+$("#grid").addEventListener("click", e => { const c = e.target.closest(".card"); if (c) abrir(+c.dataset.id); });
+
+function abrir(id) {
+  const p = D.find(x => x.id === id), dlg = $("#dlg");
+  const stats = Object.entries(p.stats).map(([k, v]) =>
+    `<div class="stat"><span>${k}</span><b>${v}</b><div class="barra"><i style="width:${Math.min(v / 255 * 100, 100)}%"></i></div></div>`).join("");
+  dlg.innerHTML = `<div class="ficha">
+    <div class="arriba"><div><span class="num">No. ${String(p.id).padStart(4, "0")}</span><strong style="font-size:1.3rem">${p.nombre}</strong></div>
+    <button class="cerrar" aria-label="Close">×</button></div>
+    <img class="sprite" id="img" src="${sp(p.id)}" alt="${p.nombre} sprite">
+    ${p.shiny ? `<button class="btnshiny" id="sh" aria-pressed="false">View shiny version</button>` : ""}
+    <div class="tipos">${p.tipos.map(t => `<span>${t}</span>`).join("")}</div>
+    <p class="desc">${p.descripcion || "No description available."}</p>
+    <div class="dato"><span>Region</span><b>${p.region} (Gen ${p.generacion})</b></div>
+    <div class="dato"><span>Category</span><b>${p.categoria || "—"}</b></div>
+    <div class="dato"><span>Height</span><b>${p.altura_m} m</b></div>
+    <div class="dato"><span>Weight</span><b>${p.peso_kg} kg</b></div>
+    <div class="dato"><span>Abilities</span><b>${p.habilidades.join(", ")}</b></div>
+    <h3>Base stats</h3>${stats}</div>`;
+  dlg.querySelector(".cerrar").onclick = () => dlg.close();
+  const sh = dlg.querySelector("#sh");
+  if (sh) sh.onclick = () => {
+    const on = sh.getAttribute("aria-pressed") !== "true";
+    sh.setAttribute("aria-pressed", on);
+    sh.textContent = on ? "View normal version" : "View shiny version";
+    dlg.querySelector("#img").src = sp(p.id, on);
+  };
+  dlg.showModal();
+}
+$("#dlg").addEventListener("click", e => { if (e.target.id === "dlg") e.target.close(); });
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
