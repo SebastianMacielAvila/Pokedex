@@ -38,6 +38,16 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .barra{height:8px;background:var(--borde);border-radius:4px;overflow:hidden}
 .barra i{display:block;height:100%;background:var(--rojo)}
 .desc{line-height:1.45;margin:10px 0}
+.mapa{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:6px 0 10px}
+.mapa button{font:inherit;padding:8px 2px;text-align:center;font-size:.72rem;border-radius:6px;border:1px solid var(--borde);background:none;color:var(--suave);cursor:pointer}
+.mapa button.on{background:var(--rojo);border-color:var(--rojo);color:#fff;font-weight:700}
+.mapa button[aria-pressed=true]{background:var(--tinta);border-color:var(--tinta);color:var(--tarjeta);font-weight:700}
+.lug h4{margin:12px 0 4px;font-size:.95rem}
+.lug details{font-size:.9rem;margin:3px 0}
+.lug summary{cursor:pointer;font-weight:600}
+.lug ul{margin:4px 0 6px;padding-left:18px;font-size:.85rem;line-height:1.4}
+.peq{font-size:.85rem;color:var(--suave)}
+.lug a{color:var(--rojo);font-weight:600;font-size:.85rem}
 #vacio{text-align:center;padding:30px;color:var(--suave)}
 </style>
 </head>
@@ -82,6 +92,7 @@ $("#grid").addEventListener("click", e => { const c = e.target.closest(".card");
 
 function abrir(id) {
   const p = D.find(x => x.id === id), dlg = $("#dlg");
+  const ev = Object.entries(p.evs || {}).map(([k, v]) => `+${v} ${k}`).join(", ") || "None";
   const stats = Object.entries(p.stats).map(([k, v]) =>
     `<div class="stat"><span>${k}</span><b>${v}</b><div class="barra"><i style="width:${Math.min(v / 255 * 100, 100)}%"></i></div></div>`).join("");
   dlg.innerHTML = `<div class="ficha">
@@ -96,7 +107,9 @@ function abrir(id) {
     <div class="dato"><span>Height</span><b>${p.altura_m} m</b></div>
     <div class="dato"><span>Weight</span><b>${p.peso_kg} kg</b></div>
     <div class="dato"><span>Abilities</span><b>${p.habilidades.join(", ")}</b></div>
-    <h3>Base stats</h3>${stats}</div>`;
+    <div class="dato"><span>EV yield</span><b>${ev}</b></div>
+    <h3>Base stats</h3>${stats}
+    <h3>Where to find</h3><div class="lug" id="lug">${p.locs ? '<p class="peq">Loading…</p>' : '<p class="peq">No location data available for this Pokémon.</p>'}</div></div>`;
   dlg.querySelector(".cerrar").onclick = () => dlg.close();
   const sh = dlg.querySelector("#sh");
   if (sh) sh.onclick = () => {
@@ -106,6 +119,39 @@ function abrir(id) {
     dlg.querySelector("#img").src = sp(p.id, on);
   };
   dlg.showModal();
+  if (p.locs) cargarLugares(p);
+}
+const ORDEN = ["Kanto", "Johto", "Hoenn", "Sinnoh", "Hisui", "Unova", "Kalos", "Alola", "Galar", "Paldea"];
+function cargarLugares(p) {
+  const cont = document.querySelector("#lug");
+  fetch(`locs/${p.id}.json`).then(r => r.json()).then(filas => {
+    filas.forEach(f => {
+      const v = f.v.toLowerCase();
+      if (f.r === "Other" && (v.includes("isle of armor") || v.includes("crown tundra"))) { f.g = 8; f.r = "Galar"; }
+    });
+    const regs = new Set(filas.map(f => f.r));
+    const lista = [...ORDEN, ...[...regs].filter(r => !ORDEN.includes(r))];
+    const wiki = `https://bulbapedia.bulbagarden.net/wiki/${encodeURIComponent(p.nombre.replace(/ /g, "_"))}_(Pok%C3%A9mon)#Game_locations`;
+    let sel = null;
+    const pintarLugares = () => {
+      const vis = sel ? filas.filter(f => f.r === sel) : filas;
+      const porGen = {};
+      vis.forEach(f => ((porGen[f.g] ||= {})[f.v] ||= []).push(f));
+      const html = !vis.length ? `<p class="peq">No encounters recorded in ${sel} for this Pokémon.</p>` : Object.keys(porGen).sort((a, b) => a - b).map(g => `<h4>${g == 0 ? "Other games" : "Generation " + g}</h4>` +
+        Object.entries(porGen[g]).map(([juego, fs]) => `<details><summary>${juego} (${fs[0].r})</summary><ul>${fs.map(f =>
+          `<li>${f.a}${f.m ? " · " + f.m : ""}${f.l ? " · Lv. " + f.l : ""}</li>`).join("")}</ul></details>`).join("")).join("");
+      cont.innerHTML = `<p class="peq">Red = recorded encounters. Tap any region to filter the list:</p><div class="mapa">${lista.map(r =>
+        `<button class="${regs.has(r) ? "on" : ""}" data-r="${r}" aria-pressed="${sel === r}">${r}</button>`).join("")}</div>` +
+        html + `<p><a href="${wiki}" target="_blank" rel="noopener">Maps on Bulbapedia</a></p>`;
+    };
+    cont.onclick = e => {
+      const b = e.target.closest("button[data-r]");
+      if (!b) return;
+      sel = sel === b.dataset.r ? null : b.dataset.r;
+      pintarLugares();
+    };
+    pintarLugares();
+  }).catch(() => { cont.innerHTML = '<p class="peq">Could not load locations. Open this Pokémon once with internet to save them.</p>'; });
 }
 $("#dlg").addEventListener("click", e => { if (e.target.id === "dlg") e.target.close(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -1,5 +1,5 @@
 // If you change data.json or index.html, bump the version so the phone updates.
-const VERSION = "pokedex-v2";
+const VERSION = "pokedex-v5";
 const BASE = ["./", "index.html", "data.json", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
